@@ -1,45 +1,41 @@
 # Analytics Service
 
-FastAPI service for survey analytics, event ingestion, CSV export, and user achievements.
+## 1. Название и назначение сервиса
 
-## Port
+`analytics-service` — микросервис аналитики в системе PIUS. Он хранит локальную статистику по ответам на опросы, принимает внутренние события от `survey-service`, отдает базовую и детальную аналитику, экспортирует данные в CSV и ведет достижения пользователей.
 
-- HTTP: `8082`
+Основные функции:
 
-## Environment
+- прием событий `answer-created` и `submission-created`;
+- расчет количества ответов и статистики по вопросам;
+- экспорт аналитики по опросу в CSV;
+- расчет статистики автора по его опросам;
+- хранение и выдача достижений пользователя.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SURVEY_SERVICE_URL` | `http://localhost:8081` | Base URL for survey-service |
-| `DATABASE_URL` | `sqlite:///./data/analytics.db` | SQLite database URL |
-| `INTERNAL_API_KEY` | `change-me` | Token for internal service calls |
+## 2. Архитектура и зависимости
 
-## HTTP API
+Технологии:
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/health` | Healthcheck |
-| `GET` | `/analytics/surveys/{survey_id}/basic` | Basic answer count |
-| `GET` | `/analytics/surveys/{survey_id}/detailed` | Detailed survey stats |
-| `GET` | `/analytics/surveys/{survey_id}/export?format=csv` | Export analytics as CSV |
-| `GET` | `/analytics/users/{user_id}/statistics` | Aggregated author statistics |
-| `GET` | `/users/{user_id}/achievements` | User achievements |
-| `POST` | `/internal/events/answer-created` | Legacy per-question answer event |
-| `POST` | `/internal/events/submission-created` | Submission-level answer event |
+- Python 3.11;
+- FastAPI и Uvicorn;
+- Pydantic;
+- SQLite;
+- Alembic;
+- HTTPX;
+- unittest и FastAPI TestClient.
 
-Internal endpoints require `X-Internal-Token: <INTERNAL_API_KEY>` or
-`Authorization: Bearer <INTERNAL_API_KEY>`.
+Взаимодействие с микросервисами:
 
-## Local Run
+- получает от `survey-service` события `POST /internal/events/submission-created`;
+- поддерживает legacy-событие `POST /internal/events/answer-created`;
+- вызывает `survey-service` для чтения количества ответов и списка опросов пользователя;
+- внутренние вызовы защищены `INTERNAL_API_KEY`.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\alembic upgrade head
-.\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
-```
+Внешние сервисы не используются. Redis, Kafka, S3 и внешняя PostgreSQL в текущей версии не требуются.
 
-## Docker
+## 3. Способы запуска сервиса
+
+### Через Docker
 
 ```powershell
 docker build -t analytics-service .
@@ -50,21 +46,68 @@ docker run --rm -p 8082:8082 `
   analytics-service
 ```
 
-## Example `POST /internal/events/submission-created`
+### Без Docker
 
-```json
-{
-  "user_id": 42,
-  "submission_id": "1001",
-  "survey_id": 7,
-  "question_ids": [1, 2, 3]
-}
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\alembic upgrade head
+.\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
 ```
 
-## Tests
+### Переменные окружения
+
+| Переменная | По умолчанию | Назначение |
+| --- | --- | --- |
+| `SURVEY_SERVICE_URL` | `http://localhost:8081` | URL сервиса опросов |
+| `DATABASE_URL` | `sqlite:///./data/analytics.db` | SQLite база данных |
+| `INTERNAL_API_KEY` | `change-me` | ключ внутренних API-вызовов |
+
+Для запуска всей системы используется общий репозиторий `bozvan/PIUS` и команда `docker compose up --build -d`.
+
+## 4. API документация
+
+После запуска Swagger доступен по адресу:
+
+- `http://localhost:8082/docs`
+- `http://localhost:8082/openapi.json`
+
+Основные эндпоинты:
+
+| Метод | Путь | Описание |
+| --- | --- | --- |
+| `GET` | `/health` | проверка работоспособности |
+| `GET` | `/analytics/surveys/{survey_id}/basic` | базовая аналитика по опросу |
+| `GET` | `/analytics/surveys/{survey_id}/detailed` | детальная статистика по вопросам |
+| `GET` | `/analytics/surveys/{survey_id}/export?format=csv` | экспорт статистики в CSV |
+| `GET` | `/analytics/users/{user_id}/statistics` | статистика автора по его опросам |
+| `GET` | `/users/{user_id}/achievements` | достижения пользователя |
+| `POST` | `/internal/events/answer-created` | legacy-событие по одному вопросу |
+| `POST` | `/internal/events/submission-created` | событие по отправленному ответу на опрос |
+
+Внутренние эндпоинты требуют заголовок `X-Internal-Token: <INTERNAL_API_KEY>` или `Authorization: Bearer <INTERNAL_API_KEY>`.
+
+## 5. Как тестировать
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\python -m unittest discover -s tests -p "test_analytics.py" -v
 ```
+
+Интеграционная проверка вместе с другими сервисами запускается из общего репозитория `PIUS`:
+
+```powershell
+docker compose up --build -d
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-integration.ps1
+docker compose down -v
+```
+
+## 6. Контакты и поддержка
+
+Автор сервиса: Бозванов И.
+
+Поддержка:
+
+- GitHub Issues: https://github.com/bozvan/analytics-service/issues
+- GitHub: https://github.com/bozvan
