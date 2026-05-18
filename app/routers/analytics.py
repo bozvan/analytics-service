@@ -21,6 +21,25 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
     "/surveys/{survey_id}/basic",
     response_model=BasicAnalyticsResponse,
     summary="Basic survey analytics",
+    responses={
+        status.HTTP_200_OK: {"description": "Successful response"},
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Survey not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Survey not found"}
+                }
+            }
+        },
+        status.HTTP_502_BAD_GATEWAY: {
+            "description": "Survey service unavailable or returned an error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Survey service is unavailable"}
+                }
+            }
+        }
+    }
 )
 def get_basic_analytics(survey_id: int) -> BasicAnalyticsResponse:
     answers_count = fetch_answer_count(survey_id)

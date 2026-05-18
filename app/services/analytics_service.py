@@ -14,7 +14,7 @@ def increment_question_stat(
         INSERT INTO question_stats (survey_id, question_id, answer_count)
         VALUES (?, ?, 1)
         ON CONFLICT(survey_id, question_id) DO UPDATE SET
-            answer_count = answer_count + 1
+            answer_count = answer_count + 1;
         """,
         (survey_id, question_id),
     )
@@ -23,7 +23,7 @@ def increment_question_stat(
         """
         SELECT answer_count
         FROM question_stats
-        WHERE survey_id = ? AND question_id = ?
+        WHERE survey_id = ? AND question_id = ?;
         """,
         (survey_id, question_id),
     ).fetchone()
@@ -60,7 +60,7 @@ def get_detailed_survey_stats(
         SELECT question_id, answer_count
         FROM question_stats
         WHERE survey_id = ?
-        ORDER BY question_id
+        ORDER BY question_id;
         """,
         (survey_id,),
     ).fetchall()
@@ -93,7 +93,7 @@ def _count_total_submissions(connection: sqlite3.Connection, survey_id: int) -> 
         """
         SELECT COUNT(DISTINCT answer_id) AS total_submissions
         FROM processed_events
-        WHERE survey_id = ? AND status = 'completed'
+        WHERE survey_id = ? AND status = 'completed';
         """,
         (survey_id,),
     ).fetchone()

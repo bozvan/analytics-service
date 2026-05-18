@@ -97,7 +97,7 @@ def _process_event(
                     """
                     SELECT status, response_status_code, response_body, error_message
                     FROM processed_events
-                    WHERE answer_id = ?
+                    WHERE answer_id = ?;
                     """,
                     (event_id,),
                 ).fetchone()
@@ -199,7 +199,7 @@ def _get_idempotency_replay(
         """
         SELECT request_hash, status, response_status_code, response_body
         FROM idempotency_keys
-        WHERE key = ?
+        WHERE key = ?;
         """,
         (idempotency_key,),
     ).fetchone()
@@ -242,7 +242,7 @@ def _insert_pending_event(
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, 'pending', ?, ?)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?);
         """,
         (
             event_id,
@@ -269,7 +269,7 @@ def _mark_event_completed(
             response_body = ?,
             error_message = NULL,
             updated_at = ?
-        WHERE answer_id = ?
+        WHERE answer_id = ?;
         """,
         (
             status.HTTP_200_OK,
@@ -320,7 +320,7 @@ def _persist_failed_operation(
                 response_status_code = excluded.response_status_code,
                 response_body = excluded.response_body,
                 error_message = excluded.error_message,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at;
             """,
             (
                 event_id,
@@ -379,7 +379,7 @@ def _upsert_idempotency_record(
             status = excluded.status,
             response_status_code = excluded.response_status_code,
             response_body = excluded.response_body,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at;
         """,
         (
             idempotency_key,

@@ -17,7 +17,7 @@ def award_achievements(
         """
         SELECT id, name, description, condition_type, condition_value
         FROM achievements
-        ORDER BY id
+        ORDER BY id;
         """
     ).fetchall()
 
@@ -40,7 +40,7 @@ def award_achievements(
                 achievement_id,
                 awarded_at
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?);
             """,
             (user_id, int(achievement["id"]), awarded_at),
         )
@@ -72,7 +72,7 @@ def list_user_achievements(
         FROM user_achievements AS ua
         JOIN achievements AS a ON a.id = ua.achievement_id
         WHERE ua.user_id = ?
-        ORDER BY ua.awarded_at, a.id
+        ORDER BY ua.awarded_at, a.id;
         """,
         (user_id,),
     ).fetchall()
@@ -97,7 +97,7 @@ def _count_answers(
         """
         SELECT COUNT(*) AS total_answers
         FROM processed_events
-        WHERE user_id = ? AND (status = 'completed' OR answer_id = ?)
+        WHERE user_id = ? AND (status = 'completed' OR answer_id = ?);
         """,
         (user_id, answer_id),
     ).fetchone()
@@ -113,7 +113,7 @@ def _count_distinct_surveys(
         """
         SELECT COUNT(DISTINCT survey_id) AS total_surveys
         FROM processed_events
-        WHERE user_id = ? AND (status = 'completed' OR answer_id = ?)
+        WHERE user_id = ? AND (status = 'completed' OR answer_id = ?);
         """,
         (user_id, answer_id),
     ).fetchone()
