@@ -26,8 +26,7 @@
 
 Взаимодействие с микросервисами:
 
-- получает от `survey-service` события `POST /internal/events/submission-created`;
-- поддерживает legacy-событие `POST /internal/events/answer-created`;
+- получает от `survey-service` события `POST /internal/events/submission-created` и `POST /internal/events/answer-created`;
 - вызывает `survey-service` для чтения количества ответов и списка опросов пользователя;
 - внутренние вызовы защищены `INTERNAL_API_KEY`.
 
@@ -93,14 +92,6 @@ python -m venv .venv
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\python -m unittest discover -s tests -p "test_analytics.py" -v
-```
-
-Интеграционная проверка вместе с другими сервисами запускается из общего репозитория `PIUS`:
-
-```powershell
-docker compose up --build -d
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-integration.ps1
-docker compose down -v
 ```
 
 ## 6. Контакты и поддержка
