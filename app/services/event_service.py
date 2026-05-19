@@ -12,7 +12,9 @@ from app.schemas import AnswerCreatedEventRequest, SubmissionCreatedEventRequest
 from app.services.achievement_service import award_achievements
 from app.services.analytics_service import increment_question_stats
 
-ResponseBuilder = Callable[[list[dict[str, int]], list[dict[str, object]]], dict[str, Any]]
+ResponseBuilder = Callable[
+    [list[dict[str, int]], list[dict[str, object]]], dict[str, Any]
+]
 
 
 def process_answer_created_event(
@@ -180,7 +182,10 @@ def _process_event(
                 detail="Failed to process event",
             ) from exc
 
-def _build_request_hash(payload: AnswerCreatedEventRequest | SubmissionCreatedEventRequest) -> str:
+
+def _build_request_hash(
+    payload: AnswerCreatedEventRequest | SubmissionCreatedEventRequest,
+) -> str:
     encoded_payload = json.dumps(
         payload.model_dump(mode="json"),
         ensure_ascii=False,
@@ -405,9 +410,7 @@ def _load_stored_response(row: sqlite3.Row) -> tuple[int, dict[str, Any]]:
     if stored_status == "pending":
         return status.HTTP_409_CONFLICT, {"detail": "Event is already being processed"}
 
-    return int(
-        row["response_status_code"] or status.HTTP_500_INTERNAL_SERVER_ERROR
-    ), {
+    return int(row["response_status_code"] or status.HTTP_500_INTERNAL_SERVER_ERROR), {
         "detail": "Failed to process event",
     }
 

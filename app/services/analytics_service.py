@@ -71,7 +71,9 @@ def get_detailed_survey_stats(
     for row in rows:
         submission_count = int(row["answer_count"])
         percentage = (
-            round((submission_count / total_submissions) * 100, 2) if total_submissions else 0.0
+            round((submission_count / total_submissions) * 100, 2)
+            if total_submissions
+            else 0.0
         )
         questions.append(
             {

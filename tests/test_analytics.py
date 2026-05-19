@@ -93,7 +93,10 @@ class AnalyticsServiceTestCase(unittest.TestCase):
         achievements = self.client.get("/users/10/achievements")
         self.assertEqual(achievements.status_code, 200)
         self.assertEqual(
-            [achievement["name"] for achievement in achievements.json()["achievements"]],
+            [
+                achievement["name"]
+                for achievement in achievements.json()["achievements"]
+            ],
             ["Первый ответ"],
         )
 
@@ -276,7 +279,10 @@ class AnalyticsServiceTestCase(unittest.TestCase):
         achievements = self.client.get("/users/40/achievements")
         self.assertEqual(achievements.status_code, 200)
         self.assertEqual(
-            [achievement["name"] for achievement in achievements.json()["achievements"]],
+            [
+                achievement["name"]
+                for achievement in achievements.json()["achievements"]
+            ],
             ["Первый ответ", "10 ответов", "Мастер опросов", "100 ответов"],
         )
 
