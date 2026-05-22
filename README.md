@@ -1,105 +1,114 @@
 # Analytics Service
 
-`analytics-service` отвечает за аналитику опросов, достижения пользователей, уведомления и экспорт аналитики в JSON.
+## 1. Название и назначение сервиса
 
-## Возможности
+**Analytics Service** — микросервис в составе платформы опросов, отвечающий за сбор, агрегацию и предоставление аналитических данных, а также за отслеживание достижений и уведомления пользователей.
 
-- базовая аналитика по числу ответов
-- детальная аналитика по вопросам
+**Основные функции:**
+- базовая аналитика по числу ответов на опрос
+- детальная аналитика по каждому вопросу опроса
 - продвинутая аналитика со средним временем прохождения
 - экспорт аналитики в JSON
-- статистика автора по его опросам
-- достижения пользователя
+- сводная статистика автора по всем его опросам
+- отслеживание достижений пользователя
 - уведомления о новых достижениях
-- обработка внутренних событий ответов и подписок
+- обработка внутренних событий (ответы, отправки опросов, подписки)
 
-## API
+## 2. Архитектура и зависимости
 
-Сервис приведён к `API Design Guide`: https://docs.ensi.tech/guidelines/api
+**Технологии и фреймворки:**
+- Python 3.11+
+- FastAPI (веб-фреймворк)
+- SQLAlchemy + Alembic (ORM и миграции)
+- SQLite (основное хранилище аналитики и достижений)
+- Uvicorn (ASGI-сервер)
 
-- базовый префикс: `/api/v1`
-- формат JSON-ответов: `data`, `errors`, `meta`
-
-Основные маршруты:
-
-| Метод | Путь | Назначение |
-| --- | --- | --- |
-| `GET` | `/api/v1/health` | healthcheck |
-| `GET` | `/api/v1/surveys/{survey_id}/analytics/basic` | базовая аналитика |
-| `GET` | `/api/v1/surveys/{survey_id}/analytics/detailed` | детальная аналитика |
-| `GET` | `/api/v1/surveys/{survey_id}/analytics/advanced` | продвинутая аналитика |
-| `GET` | `/api/v1/surveys/{survey_id}/analytics/export` | экспорт аналитики в JSON |
-| `GET` | `/api/v1/users/{user_id}/statistics` | статистика автора по опросам |
-| `GET` | `/api/v1/users/{user_id}/achievements` | достижения пользователя |
-| `GET` | `/api/v1/users/{user_id}/notifications` | уведомления пользователя |
-| `POST` | `/api/v1/internal-events:answer-created` | внутреннее событие ответа на вопрос |
-| `POST` | `/api/v1/internal-events:submission-created` | внутреннее событие отправки ответа на опрос |
-| `POST` | `/api/v1/internal-events:follower-created` | внутреннее событие новой подписки |
-
-## Достижения
-
-Дополнительно реализованы сложные достижения:
-
-- `Hard worker` — 50 ответов
-- `Explorer` — ответы в 5 категориях
-- `Celebrity` — 50 подписчиков
-
-## Интеграции
-
-- получает события от `survey-service`
-- читает данные из `survey-service` по:
+**Взаимодействие с другими микросервисами:**
+- `survey-service` — получение статистики ответов и поиска опросов:
   - `GET /api/v1/surveys/{survey_id}/answer-stats`
   - `POST /api/v1/users/{user_id}/surveys:search`
-- получает события подписок от `user-service`
+- `survey-service` — приём внутренних событий:
+  - `POST /api/v1/internal-events:answer-created`
+  - `POST /api/v1/internal-events:submission-created`
+- `user-service` — приём внутренних событий:
+  - `POST /api/v1/internal-events:follower-created`
 
-## Запуск
+**Внешние сервисы:**
+- отсутствуют (в текущей версии Redis, S3, Kafka не используются)
 
-Через Docker:
+## 3. Способы запуска сервиса
 
-```powershell
+### Локальный запуск через Docker
+
+```
 docker build -t analytics-service .
-docker run --rm -p 8082:8082 `
-  -e DATABASE_URL=sqlite:///./data/analytics.db `
-  -e SURVEY_SERVICE_URL=http://host.docker.internal:8081 `
-  -e INTERNAL_API_KEY=change-me-local-internal-key `
+docker run --rm -p 8082:8082 \
+  -e DATABASE_URL=sqlite:///./data/analytics.db \
+  -e SURVEY_SERVICE_URL=http://host.docker.internal:8081 \
+  -e INTERNAL_API_KEY=change-me-local-internal-key \
   analytics-service
 ```
 
-Локально:
+### Альтернативный запуск без Docker
 
-```powershell
+```
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m alembic upgrade head
-.\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
 ```
 
-Переменные окружения:
+### Переменные окружения (.env)
 
 | Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
-| `SURVEY_SERVICE_URL` | `http://localhost:8081` | адрес `survey-service` |
-| `DATABASE_URL` | `sqlite:///./data/analytics.db` | SQLite база данных |
-| `INTERNAL_API_KEY` | `change-me` | ключ внутренних API |
+| `SURVEY_SERVICE_URL` | `http://localhost:8081` | адрес survey-service |
+| `DATABASE_URL` | `sqlite:///./data/analytics.db` | строка подключения к SQLite |
+| `INTERNAL_API_KEY` | `change-me` | ключ для аутентификации внутренних API-вызовов |
 
-## Тесты
+## 4. API документация
 
-```powershell
+Сервис следует API Design Guide: https://docs.ensi.tech/guidelines/api
+
+- Базовый префикс: `/api/v1`
+- Формат JSON-ответов: `data`, `errors`, `meta`
+
+**Документация OpenAPI/Swagger** (доступна после запуска):
+- Swagger UI: `http://localhost:8082/docs`
+- ReDoc: `http://localhost:8082/redoc`
+
+**Основные эндпоинты:**
+
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | healthcheck сервиса |
+| `GET` | `/api/v1/surveys/{survey_id}/analytics/basic` | базовая аналитика опроса |
+| `GET` | `/api/v1/surveys/{survey_id}/analytics/detailed` | детальная аналитика по вопросам |
+| `GET` | `/api/v1/surveys/{survey_id}/analytics/advanced` | продвинутая аналитика (время прохождения) |
+| `GET` | `/api/v1/surveys/{survey_id}/analytics/export` | экспорт аналитики в JSON |
+| `GET` | `/api/v1/users/{user_id}/statistics` | статистика автора по всем опросам |
+| `GET` | `/api/v1/users/{user_id}/achievements` | достижения пользователя |
+| `GET` | `/api/v1/users/{user_id}/notifications` | уведомления пользователя |
+| `POST` | `/api/v1/internal-events:answer-created` | внутреннее событие создания ответа |
+| `POST` | `/api/v1/internal-events:submission-created` | внутреннее событие отправки опроса |
+| `POST` | `/api/v1/internal-events:follower-created` | внутреннее событие новой подписки |
+
+## 5. Как тестировать
+
+Запуск всех тестов:
+
+```
 python -m unittest discover -s tests -p "test_analytics.py" -v
 ```
 
-## Git hooks
+Установка pre-push хука для автоматического запуска тестов:
 
-В репозиторий добавлен `pre-push` hook, который запускает тесты.
-
-Установка внутри `analytics-service`:
-
-```powershell
+```
 git config core.hooksPath .githooks
 ```
 
-Либо из корня монорепозитория:
+## 6. Контакты и поддержка
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File ..\..\scripts\install-git-hooks.ps1
-```
+По всем вопросам и проблемам обращаться:
+- GitHub Issues: [в репозитории сервиса](https://github.com/bozvan/analytics-service/issues)
+- Автор: Бозванов Иван
