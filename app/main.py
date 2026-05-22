@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api import register_exception_handlers, success_response
 from app.db import initialize_database
 from app.routers.analytics import router as analytics_router
 from app.routers.internal import router as internal_router
@@ -23,10 +24,11 @@ def create_app() -> FastAPI:
         version="1.1.0",
         lifespan=lifespan,
     )
+    register_exception_handlers(app)
 
-    @app.get("/health", summary="Service healthcheck")
-    def healthcheck() -> dict[str, str]:
-        return {"status": "ok"}
+    @app.get("/api/v1/health", summary="Service healthcheck")
+    def healthcheck() -> dict[str, object]:
+        return success_response({"status": "ok"})
 
     app.include_router(analytics_router)
     app.include_router(internal_router)

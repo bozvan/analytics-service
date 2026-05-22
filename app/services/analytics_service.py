@@ -90,6 +90,29 @@ def get_detailed_survey_stats(
     }
 
 
+def get_advanced_survey_stats(
+    connection: sqlite3.Connection,
+    survey_id: int,
+) -> dict[str, Any]:
+    row = connection.execute(
+        """
+        SELECT
+            COUNT(DISTINCT answer_id) AS total_submissions,
+            AVG(duration_seconds) AS average_completion_seconds
+        FROM processed_events
+        WHERE survey_id = ? AND status = 'completed';
+        """,
+        (survey_id,),
+    ).fetchone()
+    return {
+        "survey_id": survey_id,
+        "total_submissions": int(row["total_submissions"] or 0),
+        "average_completion_seconds": round(
+            float(row["average_completion_seconds"] or 0), 2
+        ),
+    }
+
+
 def _count_total_submissions(connection: sqlite3.Connection, survey_id: int) -> int:
     row = connection.execute(
         """

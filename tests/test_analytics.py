@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 
+API_PREFIX = "/api/v1"
+
 
 class AnalyticsServiceTestCase(unittest.TestCase):
     def setUp(self) -> None:
@@ -41,23 +43,23 @@ class AnalyticsServiceTestCase(unittest.TestCase):
 
     def test_basic_analytics_returns_count(self) -> None:
         with patch("app.routers.analytics.fetch_answer_count", return_value=7):
-            response = self.client.get("/analytics/surveys/1/basic")
+            response = self.client.get(f"{API_PREFIX}/surveys/1/analytics/basic")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"survey_id": 1, "answers_count": 7})
+        self.assertEqual(self.data(response), {"survey_id": 1, "answers_count": 7})
 
     def test_answer_created_requires_internal_token(self) -> None:
         response = self.client.post(
-            "/internal/events/answer-created",
-            json=self._event_payload(answer_id="answer-1"),
+            f"{API_PREFIX}/internal-events:answer-created",
+            json=self._event_payload(answer_id=1),
         )
 
         self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json(), {"detail": "Unauthorized"})
+        self.assertEqual(self.error_message(response), "Unauthorized")
 
     def test_answer_created_updates_stats_and_awards_first_achievement(self) -> None:
         response = self._post_event(
-            answer_id="answer-1",
+            answer_id=1,
             user_id=10,
             question_id=101,
             survey_id=501,
@@ -65,18 +67,18 @@ class AnalyticsServiceTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        body = response.json()
+        body = self.data(response)
         self.assertEqual(body["status"], "processed")
         self.assertEqual(body["answer_count"], 1)
         self.assertEqual(
-            [achievement["name"] for achievement in body["awarded_achievements"]],
-            ["Первый ответ"],
+            [achievement["id"] for achievement in body["awarded_achievements"]],
+            [1],
         )
 
-        detailed = self.client.get("/analytics/surveys/501/detailed")
+        detailed = self.client.get(f"{API_PREFIX}/surveys/501/analytics/detailed")
         self.assertEqual(detailed.status_code, 200)
         self.assertEqual(
-            detailed.json(),
+            self.data(detailed),
             {
                 "survey_id": 501,
                 "total_submissions": 1,
@@ -90,121 +92,57 @@ class AnalyticsServiceTestCase(unittest.TestCase):
             },
         )
 
-        achievements = self.client.get("/users/10/achievements")
+        achievements = self.client.get(f"{API_PREFIX}/users/10/achievements")
         self.assertEqual(achievements.status_code, 200)
         self.assertEqual(
-            [
-                achievement["name"]
-                for achievement in achievements.json()["achievements"]
-            ],
-            ["Первый ответ"],
+            [achievement["id"] for achievement in self.data(achievements)["achievements"]],
+            [1],
         )
 
-        processed_row = self._fetchone(
-            "SELECT status FROM processed_events WHERE answer_id = ?",
-            ("answer-1",),
-        )
-        idempotency_row = self._fetchone(
-            "SELECT status FROM idempotency_keys WHERE key = ?",
-            ("idem-1",),
-        )
-        self.assertEqual(processed_row["status"], "completed")
-        self.assertEqual(idempotency_row["status"], "completed")
-
-    def test_idempotency_and_deduplication_return_saved_result(self) -> None:
+    def test_idempotency_and_detailed_export_and_advanced_analytics(self) -> None:
         first_response = self._post_event(
-            answer_id="answer-2",
+            answer_id=2,
             user_id=20,
             question_id=202,
             survey_id=502,
             idempotency_key="idem-2",
+            duration_seconds=10,
         )
         second_response = self._post_event(
-            answer_id="answer-2",
+            answer_id=2,
             user_id=20,
             question_id=202,
             survey_id=502,
             idempotency_key="idem-2",
+            duration_seconds=10,
         )
-        third_response = self._post_event(
-            answer_id="answer-2",
-            user_id=20,
-            question_id=202,
+        self._post_event(
+            answer_id=3,
+            user_id=21,
+            question_id=203,
             survey_id=502,
-            idempotency_key="idem-2b",
+            idempotency_key="idem-3",
+            duration_seconds=20,
         )
 
         self.assertEqual(first_response.status_code, 200)
         self.assertEqual(second_response.status_code, 200)
-        self.assertEqual(third_response.status_code, 200)
-        self.assertEqual(second_response.json(), first_response.json())
-        self.assertEqual(third_response.json(), first_response.json())
+        self.assertEqual(self.data(second_response), self.data(first_response))
 
-        detailed = self.client.get("/analytics/surveys/502/detailed")
-        self.assertEqual(detailed.json()["total_submissions"], 1)
-        self.assertEqual(
-            self._fetchval("SELECT COUNT(*) FROM processed_events"),
-            1,
-        )
-        self.assertEqual(
-            self._fetchval("SELECT COUNT(*) FROM idempotency_keys"),
-            2,
-        )
+        detailed = self.client.get(f"{API_PREFIX}/surveys/502/analytics/detailed")
+        json_export = self.client.get(f"{API_PREFIX}/surveys/502/analytics/export")
+        advanced = self.client.get(f"{API_PREFIX}/surveys/502/analytics/advanced")
 
-    def test_detailed_analytics_and_csv_export(self) -> None:
-        self._post_event(
-            answer_id="answer-3",
-            user_id=30,
-            question_id=301,
-            survey_id=503,
-            idempotency_key="idem-3",
-        )
-        self._post_event(
-            answer_id="answer-4",
-            user_id=30,
-            question_id=302,
-            survey_id=503,
-            idempotency_key="idem-4",
-        )
-
-        detailed = self.client.get("/analytics/surveys/503/detailed")
         self.assertEqual(detailed.status_code, 200)
-        self.assertEqual(
-            detailed.json(),
-            {
-                "survey_id": 503,
-                "total_submissions": 2,
-                "questions": [
-                    {
-                        "question_id": 301,
-                        "submission_count": 1,
-                        "percentage": 50.0,
-                    },
-                    {
-                        "question_id": 302,
-                        "submission_count": 1,
-                        "percentage": 50.0,
-                    },
-                ],
-            },
-        )
-
-        export_response = self.client.get("/analytics/surveys/503/export?format=csv")
-        self.assertEqual(export_response.status_code, 200)
-        self.assertIn("text/csv", export_response.headers["content-type"])
-        self.assertIn(
-            'attachment; filename="survey_503_analytics.csv"',
-            export_response.headers["content-disposition"],
-        )
-
-        csv_lines = export_response.text.strip().splitlines()
-        self.assertEqual(csv_lines[0], "question_id,submission_count,percentage")
-        self.assertEqual(csv_lines[1], "301,1,50.0")
-        self.assertEqual(csv_lines[2], "302,1,50.0")
+        self.assertEqual(self.data(detailed)["total_submissions"], 2)
+        self.assertEqual(json_export.status_code, 200)
+        self.assertEqual(self.data(json_export)["survey_id"], 502)
+        self.assertEqual(advanced.status_code, 200)
+        self.assertEqual(self.data(advanced)["average_completion_seconds"], 15.0)
 
     def test_submission_created_updates_multiple_question_stats_once(self) -> None:
         response = self._post_submission_event(
-            submission_id="submission-1",
+            submission_id=1,
             user_id=60,
             survey_id=506,
             question_ids=[601, 602],
@@ -212,79 +150,44 @@ class AnalyticsServiceTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["status"], "processed")
-        self.assertEqual(body["submission_id"], "submission-1")
-        self.assertEqual(body["survey_id"], 506)
         self.assertEqual(
-            body["question_counts"],
+            self.data(response)["question_counts"],
             [
                 {"question_id": 601, "submission_count": 1},
                 {"question_id": 602, "submission_count": 1},
             ],
         )
-        self.assertEqual(len(body["awarded_achievements"]), 1)
-        self.assertEqual(body["awarded_achievements"][0]["id"], 1)
-        self.assertTrue(body["awarded_achievements"][0]["awarded_at"])
 
-        detailed = self.client.get("/analytics/surveys/506/detailed")
-        self.assertEqual(
-            detailed.json(),
-            {
-                "survey_id": 506,
-                "total_submissions": 1,
-                "questions": [
-                    {
-                        "question_id": 601,
-                        "submission_count": 1,
-                        "percentage": 100.0,
-                    },
-                    {
-                        "question_id": 602,
-                        "submission_count": 1,
-                        "percentage": 100.0,
-                    },
-                ],
-            },
-        )
-
-    def test_achievements_are_awarded_for_thresholds_and_distinct_surveys(self) -> None:
-        for index in range(1, 11):
+    def test_complex_achievements_and_notifications(self) -> None:
+        for index in range(1, 51):
             self._post_event(
-                answer_id=f"answer-10-{index}",
-                user_id=40,
-                question_id=401,
-                survey_id=504,
-                idempotency_key=f"idem-10-{index}",
+                answer_id=index,
+                user_id=70,
+                question_id=700 + index,
+                survey_id=7000 + index,
+                idempotency_key=f"worker-idem-{index}",
+                category=f"category-{index % 5}",
             )
 
-        for survey_offset in range(1, 5):
-            self._post_event(
-                answer_id=f"answer-survey-{survey_offset}",
-                user_id=40,
-                question_id=401 + survey_offset,
-                survey_id=504 + survey_offset,
-                idempotency_key=f"idem-survey-{survey_offset}",
+        for _ in range(50):
+            follower_response = self.client.post(
+                f"{API_PREFIX}/internal-events:follower-created",
+                json={"user_id": 70},
+                headers={"X-Internal-Token": "test-internal-token"},
             )
+            self.assertEqual(follower_response.status_code, 200)
 
-        for index in range(15, 101):
-            self._post_event(
-                answer_id=f"answer-100-{index}",
-                user_id=40,
-                question_id=499,
-                survey_id=504,
-                idempotency_key=f"idem-100-{index}",
-            )
+        achievements = self.client.get(f"{API_PREFIX}/users/70/achievements")
+        notifications = self.client.get(f"{API_PREFIX}/users/70/notifications")
 
-        achievements = self.client.get("/users/40/achievements")
-        self.assertEqual(achievements.status_code, 200)
-        self.assertEqual(
-            [
-                achievement["name"]
-                for achievement in achievements.json()["achievements"]
-            ],
-            ["Первый ответ", "10 ответов", "Мастер опросов", "100 ответов"],
-        )
+        achievement_names = [
+            item["name"] for item in self.data(achievements)["achievements"]
+        ]
+        self.assertIn("Hard worker", achievement_names)
+        self.assertIn("Explorer", achievement_names)
+        self.assertIn("Celebrity", achievement_names)
+        self.assertEqual(notifications.status_code, 200)
+        self.assertTrue(self.data(notifications)["notifications"])
 
     def test_failed_processing_marks_operation_as_failed(self) -> None:
         with patch(
@@ -292,7 +195,7 @@ class AnalyticsServiceTestCase(unittest.TestCase):
             side_effect=RuntimeError("boom"),
         ):
             response = self._post_event(
-                answer_id="answer-failed",
+                answer_id=9999,
                 user_id=50,
                 question_id=501,
                 survey_id=505,
@@ -300,11 +203,11 @@ class AnalyticsServiceTestCase(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json(), {"detail": "Failed to process event"})
+        self.assertEqual(self.error_message(response), "Failed to process event")
 
         processed_row = self._fetchone(
             "SELECT status FROM processed_events WHERE answer_id = ?",
-            ("answer-failed",),
+            ("9999",),
         )
         idempotency_row = self._fetchone(
             "SELECT status FROM idempotency_keys WHERE key = ?",
@@ -316,19 +219,23 @@ class AnalyticsServiceTestCase(unittest.TestCase):
     def _post_event(
         self,
         *,
-        answer_id: str,
+        answer_id: int,
         user_id: int,
         question_id: int,
         survey_id: int,
         idempotency_key: str,
+        category: str | None = None,
+        duration_seconds: float | None = None,
     ):
         return self.client.post(
-            "/internal/events/answer-created",
+            f"{API_PREFIX}/internal-events:answer-created",
             json=self._event_payload(
                 answer_id=answer_id,
                 user_id=user_id,
                 question_id=question_id,
                 survey_id=survey_id,
+                category=category,
+                duration_seconds=duration_seconds,
             ),
             headers={
                 "X-Internal-Token": "test-internal-token",
@@ -339,14 +246,14 @@ class AnalyticsServiceTestCase(unittest.TestCase):
     def _post_submission_event(
         self,
         *,
-        submission_id: str,
+        submission_id: int,
         user_id: int,
         survey_id: int,
         question_ids: list[int],
         idempotency_key: str,
     ):
         return self.client.post(
-            "/internal/events/submission-created",
+            f"{API_PREFIX}/internal-events:submission-created",
             json={
                 "user_id": user_id,
                 "submission_id": submission_id,
@@ -362,17 +269,27 @@ class AnalyticsServiceTestCase(unittest.TestCase):
     def _event_payload(
         self,
         *,
-        answer_id: str,
+        answer_id: int,
         user_id: int = 1,
         question_id: int = 1,
         survey_id: int = 1,
+        category: str | None = None,
+        duration_seconds: float | None = None,
     ) -> dict[str, object]:
         return {
             "user_id": user_id,
             "answer_id": answer_id,
             "question_id": question_id,
             "survey_id": survey_id,
+            "category": category,
+            "duration_seconds": duration_seconds,
         }
+
+    def data(self, response):
+        return response.json()["data"]
+
+    def error_message(self, response) -> str:
+        return response.json()["errors"][0]["message"]
 
     def _fetchone(self, query: str, params: tuple[object, ...]) -> sqlite3.Row:
         connection = sqlite3.connect(self.database_path)

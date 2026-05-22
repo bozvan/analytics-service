@@ -13,7 +13,7 @@ def _survey_service_url() -> str:
 
 
 def fetch_answer_count(survey_id: int) -> int:
-    url = f"{_survey_service_url()}/surveys/{survey_id}/answers/count"
+    url = f"{_survey_service_url()}/api/v1/surveys/{survey_id}/answer-stats"
     try:
         response = httpx.get(url, timeout=5.0)
         response.raise_for_status()
@@ -34,14 +34,14 @@ def fetch_answer_count(survey_id: int) -> int:
         ) from exc
 
     payload = response.json()
-    return int(payload["answers_count"])
+    return int(payload["data"]["answers_count"])
 
 
 def fetch_user_surveys(user_id: int) -> Optional[List[Dict[str, Any]]]:
-    url = f"{_survey_service_url()}/users/{user_id}/surveys"
+    url = f"{_survey_service_url()}/api/v1/users/{user_id}/surveys:search"
 
     try:
-        response = httpx.get(url, timeout=5.0)
+        response = httpx.post(url, json={}, timeout=5.0)
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == status.HTTP_404_NOT_FOUND:
@@ -56,7 +56,7 @@ def fetch_user_surveys(user_id: int) -> Optional[List[Dict[str, Any]]]:
             detail="Survey service is unavailable",
         ) from exc
 
-    return response.json()
+    return response.json()["data"]
 
 
 def fetch_all_surveys_stats() -> Dict[str, Any]:
@@ -75,7 +75,7 @@ def fetch_all_surveys_stats() -> Dict[str, Any]:
 
 
 def check_survey_service_health() -> bool:
-    url = f"{_survey_service_url()}/health"
+    url = f"{_survey_service_url()}/api/v1/health"
 
     try:
         response = httpx.get(url, timeout=2.0)

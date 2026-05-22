@@ -36,6 +36,9 @@ ACHIEVEMENT_DEFINITIONS = (
         "distinct_surveys",
         5,
     ),
+    (5, "Hard worker", "User submitted 50 answers.", "total_answers", 50),
+    (6, "Explorer", "User answered surveys in 5 categories.", "distinct_categories", 5),
+    (7, "Celebrity", "User gained 50 followers.", "followers", 50),
 )
 
 
@@ -98,6 +101,11 @@ def initialize_database() -> None:
             CREATE INDEX IF NOT EXISTS ix_processed_events_user_survey_status
             ON processed_events (user_id, survey_id, status);
 
+            CREATE TABLE IF NOT EXISTS follower_counts (
+                user_id INTEGER PRIMARY KEY,
+                followers_count INTEGER NOT NULL DEFAULT 0
+            );
+
             CREATE TABLE IF NOT EXISTS idempotency_keys (
                 key TEXT PRIMARY KEY,
                 request_hash TEXT NOT NULL,
@@ -136,7 +144,25 @@ def initialize_database() -> None:
             ON user_achievements (user_id);
             """
         )
+        ensure_column(connection, "processed_events", "category", "TEXT")
+        ensure_column(connection, "processed_events", "duration_seconds", "REAL")
         seed_achievements(connection)
+
+
+def ensure_column(
+    connection: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    column_definition: str,
+) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+    if column_name not in columns:
+        connection.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+        )
 
 
 def seed_achievements(connection: sqlite3.Connection) -> None:

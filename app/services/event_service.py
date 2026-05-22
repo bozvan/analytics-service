@@ -26,6 +26,8 @@ def process_answer_created_event(
         user_id=payload.user_id,
         survey_id=payload.survey_id,
         question_ids=[payload.question_id],
+        category=payload.category,
+        duration_seconds=payload.duration_seconds,
         request_hash=_build_request_hash(payload),
         idempotency_key=idempotency_key,
         response_builder=lambda question_counts, awarded_achievements: {
@@ -48,6 +50,8 @@ def process_submission_created_event(
         user_id=payload.user_id,
         survey_id=payload.survey_id,
         question_ids=payload.question_ids,
+        category=payload.category,
+        duration_seconds=payload.duration_seconds,
         request_hash=_build_request_hash(payload),
         idempotency_key=idempotency_key,
         response_builder=lambda question_counts, awarded_achievements: {
@@ -62,10 +66,12 @@ def process_submission_created_event(
 
 def _process_event(
     *,
-    event_id: str,
+    event_id: int,
     user_id: int,
     survey_id: int,
     question_ids: list[int],
+    category: str | None,
+    duration_seconds: float | None,
     request_hash: str,
     idempotency_key: str | None,
     response_builder: ResponseBuilder,
@@ -75,6 +81,7 @@ def _process_event(
     with get_connection() as connection:
         try:
             connection.execute("BEGIN")
+            event_key = str(event_id)
 
             if idempotency_key:
                 replayed_response = _get_idempotency_replay(
@@ -89,10 +96,12 @@ def _process_event(
             try:
                 _insert_pending_event(
                     connection=connection,
-                    event_id=event_id,
+                    event_id=event_key,
                     user_id=user_id,
                     survey_id=survey_id,
                     question_ids=normalized_question_ids,
+                    category=category,
+                    duration_seconds=duration_seconds,
                 )
             except sqlite3.IntegrityError:
                 existing_event = connection.execute(
@@ -101,7 +110,7 @@ def _process_event(
                     FROM processed_events
                     WHERE answer_id = ?;
                     """,
-                    (event_id,),
+                    (event_key,),
                 ).fetchone()
                 if existing_event is None:
                     raise
@@ -112,7 +121,7 @@ def _process_event(
                         connection=connection,
                         idempotency_key=idempotency_key,
                         request_hash=request_hash,
-                        answer_id=event_id,
+                        answer_id=event_key,
                         operation_status=str(existing_event["status"]),
                         response_status=response_status,
                         response_body=response_body,
@@ -126,7 +135,7 @@ def _process_event(
                     connection=connection,
                     idempotency_key=idempotency_key,
                     request_hash=request_hash,
-                    answer_id=event_id,
+                    answer_id=event_key,
                     operation_status="pending",
                     response_status=status.HTTP_202_ACCEPTED,
                     response_body={"detail": "Request is being processed"},
@@ -140,19 +149,19 @@ def _process_event(
             awarded_achievements = award_achievements(
                 connection,
                 user_id=user_id,
-                answer_id=event_id,
+                answer_id=event_key,
             )
 
             response_body = response_builder(question_counts, awarded_achievements)
 
-            _mark_event_completed(connection, event_id, response_body)
+            _mark_event_completed(connection, event_key, response_body)
 
             if idempotency_key:
                 _upsert_idempotency_record(
                     connection=connection,
                     idempotency_key=idempotency_key,
                     request_hash=request_hash,
-                    answer_id=event_id,
+                    answer_id=event_key,
                     operation_status="completed",
                     response_status=status.HTTP_200_OK,
                     response_body=response_body,
@@ -167,7 +176,7 @@ def _process_event(
             connection.rollback()
             failure_body = {"detail": "Failed to process event"}
             _persist_failed_operation(
-                event_id=event_id,
+                event_id=event_key,
                 user_id=user_id,
                 survey_id=survey_id,
                 question_ids=normalized_question_ids,
@@ -234,6 +243,8 @@ def _insert_pending_event(
     user_id: int,
     survey_id: int,
     question_ids: list[int],
+    category: str | None,
+    duration_seconds: float | None,
 ) -> None:
     timestamp = utcnow()
     connection.execute(
@@ -243,17 +254,21 @@ def _insert_pending_event(
             user_id,
             question_id,
             survey_id,
+            category,
+            duration_seconds,
             status,
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, 'pending', ?, ?);
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?);
         """,
         (
             event_id,
             user_id,
             _primary_question_id(question_ids),
             survey_id,
+            category,
+            duration_seconds,
             timestamp,
             timestamp,
         ),

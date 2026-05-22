@@ -19,16 +19,20 @@ class UserStatisticsResponse(BaseModel):
 
 class AnswerCreatedEventRequest(BaseModel):
     user_id: int
-    answer_id: str = Field(min_length=1)
+    answer_id: int = Field(gt=0)
     question_id: int
     survey_id: int
+    category: str | None = None
+    duration_seconds: float | None = Field(default=None, ge=0)
 
 
 class SubmissionCreatedEventRequest(BaseModel):
     user_id: int
-    submission_id: str = Field(min_length=1)
+    submission_id: int = Field(gt=0)
     survey_id: int
     question_ids: List[int] = Field(min_length=1)
+    category: str | None = None
+    duration_seconds: float | None = Field(default=None, ge=0)
 
     @field_validator("question_ids")
     @classmethod
@@ -50,7 +54,7 @@ class AwardedAchievementResponse(BaseModel):
 
 class AnswerCreatedEventResponse(BaseModel):
     status: str
-    answer_id: str
+    answer_id: int
     survey_id: int
     question_id: int
     answer_count: int
@@ -64,7 +68,7 @@ class ProcessedQuestionCountResponse(BaseModel):
 
 class SubmissionCreatedEventResponse(BaseModel):
     status: str
-    submission_id: str
+    submission_id: int
     survey_id: int
     question_counts: List[ProcessedQuestionCountResponse]
     awarded_achievements: List[AwardedAchievementResponse]
@@ -82,6 +86,12 @@ class DetailedSurveyAnalyticsResponse(BaseModel):
     questions: List[DetailedQuestionAnalyticsResponse]
 
 
+class AdvancedSurveyAnalyticsResponse(BaseModel):
+    survey_id: int
+    total_submissions: int
+    average_completion_seconds: float
+
+
 class UserAchievementResponse(BaseModel):
     id: int
     name: str
@@ -92,3 +102,18 @@ class UserAchievementResponse(BaseModel):
 class UserAchievementsListResponse(BaseModel):
     user_id: int
     achievements: List[UserAchievementResponse]
+
+
+class FollowerCreatedEventRequest(BaseModel):
+    user_id: int
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    message: str
+    created_at: str
+
+
+class UserNotificationsResponse(BaseModel):
+    user_id: int
+    notifications: List[NotificationResponse]
